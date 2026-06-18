@@ -3,104 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SO2 Private Map</title>
+    <title>SO2 Smart Radar</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background: #111;
-            font-family: sans-serif;
-            overflow: hidden;
-        }
-        #map {
-            width: 100%;
-            height: 100vh;
-            z-index: 1;
-        }
-        .instruction {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 14px;
-            pointer-events: none;
-        }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #111; font-family: sans-serif; overflow: hidden; }
+        #map { width: 100%; height: 100vh; z-index: 1; }
+        /* Умная панель интерфейса */
+        .ui-panel { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(0, 0, 0, 0.85); color: #fff; padding: 12px 20px; border-radius: 8px; text-align: center; font-size: 14px; width: 80%; max-width: 450px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .ui-panel input { width: 100%; padding: 6px; margin-top: 8px; background: #222; color: #0f0; border: 1px solid #555; border-radius: 4px; text-align: center; font-family: monospace; outline: none; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div class="instruction" id="status">Подключение к сети...</div>
+    <div class="ui-panel" id="ui">Подключение к серверу связи...</div>
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script>
-        // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ (Твоя рабочая база) ---
-        const MAP_IMAGE = 'radar.jpg';
-        const IMAGE_WIDTH = 1024;
-        const IMAGE_HEIGHT = 1024;
-
-        const map = L.map('map', {
-            crs: L.CRS.Simple,
-            minZoom: -2,
-            maxZoom: 1,
-            zoomControl: true,
-            attributionControl: false
-        });
-
-        const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
-        L.imageOverlay(MAP_IMAGE, bounds, { interactive: true }).addTo(map);
+        // --- 1. НАСТРОЙКА КАРТЫ ---
+        const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 1, zoomControl: true, attributionControl: false });
+        const bounds = [[0, 0], [1024, 1024]];
+        L.imageOverlay('radar.jpg', bounds, { interactive: true }).addTo(map);
         map.fitBounds(bounds);
 
         let myMarker = null;
         let friendMarker = null;
-        let conn = null;
+        let connection = null;
 
-        // --- 2. НАСТРОЙКА СЕТИ (Прямая связь без блокировок) ---
-        const statusText = document.getElementById('status');
+        // --- 2. УМНАЯ СЕТЬ (Генерация приватной ссылки) ---
+        const ui = document.getElementById('ui');
+        const peer = new Peer(); // Создаем случайный уникальный ID
        
-        // Разделяем окна: если в ссылке есть ?friend, то это Игрок 2
-        const isFriend = window.location.search.includes('friend');
-        const myID = isFriend ? 'so2-radar-player-2' : 'so2-radar-player-1';
-        const friendID = isFriend ? 'so2-radar-player-1' : 'so2-radar-player-2';
+        // Проверяем, есть ли в ссылке приглашение от друга
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomToJoin = urlParams.get('room');
 
-        const peer = new Peer(myID, { debug: 1 });
-
-        peer.on('open', () => {
-            if (!isFriend) {
-                statusText.innerText = "Игрок 1 в сети. Скинь другу ссылку с ?friend на конце";
+        peer.on('open', (myId) => {
+            if (roomToJoin) {
+                // Если мы перешли по ссылке друга
+                ui.innerHTML = "Подключаемся к напарнику...";
+                connection = peer.connect(roomToJoin);
+                setupConnection(connection);
             } else {
-                statusText.innerText = "Подключаемся к Игроку 1...";
-                connectToFriend();
+                // Если мы сами создали карту (Игрок 1)
+                const inviteLink = window.location.origin + window.location.pathname + '?room=' + myId;
+                ui.innerHTML = `Отправь эту ссылку напарнику:<br><input type="text" value="${inviteLink}" readonly onclick="this.select(); document.execCommand('copy'); alert('Ссылка скопирована!');">`;
             }
         });
 
-        // Слушаем подключение от второго игрока
-        peer.on('connection', (connection) => {
-            conn = connection;
-            statusText.innerText = "Радар синхронизирован! Друг на связи";
-            setupDataListener();
+        // Если друг подключился к нам по нашей ссылке
+        peer.on('connection', (conn) => {
+            connection = conn;
+            setupConnection(connection);
         });
 
-        function connectToFriend() {
-            conn = peer.connect(friendID);
+        function setupConnection(conn) {
             conn.on('open', () => {
-                statusText.innerText = "Успешно подключено к Игроку 1!";
-                setupDataListener();
+                ui.innerHTML = "<span style='color: #0f0; font-weight: bold;'>Связь установлена! Радар синхронизирован.</span>";
             });
-        }
-
-        // Прием чужих координат (Отображаем красный кружок)
-        function setupDataListener() {
+           
+            // Получаем метку от друга и ставим красный кружок
             conn.on('data', (data) => {
                 if (data && data.lat && data.lng) {
                     if (friendMarker) map.removeLayer(friendMarker);
@@ -111,7 +75,7 @@
             });
         }
 
-        // --- 3. ОБРАБОТКА КЛИКА ПО КАРТЕ ---
+        // --- 3. ОБРАБОТКА КЛИКОВ ПО КАРТЕ ---
         map.on('click', function(e) {
             const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
             if (myMarker) map.removeLayer(myMarker);
@@ -121,9 +85,9 @@
                 radius: 12, fillColor: '#0074D9', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8
             }).addTo(map).bindPopup('<b>Моя метка</b>').openPopup();
            
-            // Отправка координат другу напрямую
-            if (conn && conn.open) {
-                conn.send(coords);
+            // Отправляем координаты напрямую другу
+            if (connection && connection.open) {
+                connection.send(coords);
             }
         });
     </script>
