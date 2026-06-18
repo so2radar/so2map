@@ -41,7 +41,7 @@
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@liveblocks/client@2.14.0/dist/index.min.js"></script>
+    <script src="https://unpkg.com/@liveblocks/client@2.14.0/dist/index.min.js"></script>
 
     <script>
         // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ ---
@@ -59,7 +59,7 @@
 
         const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
        
-        // Картинка теперь 100% кликабельная
+        // Включаем интерактивность, чтобы клики ловились картой
         L.imageOverlay(MAP_IMAGE, bounds, { interactive: true }).addTo(map);
         map.fitBounds(bounds);
 
@@ -74,7 +74,7 @@
             initialPresence: { markerCoords: null }
         });
 
-        // Отслеживаем действия друга
+        // Слушаем метки от друга
         room.subscribe("others", (others) => {
             let hasFriend = false;
             others.forEach(user => {
@@ -83,7 +83,7 @@
                    
                     if (friendMarker) map.removeLayer(friendMarker);
                    
-                    // Безопасный круглый маркер для друга (Красный)
+                    // Рисуем красный кружок кодом (не ломает пути к картинкам)
                     friendMarker = L.circleMarker([coords.lat, coords.lng], {
                         radius: 12,
                         fillColor: '#FF4136',
@@ -108,7 +108,7 @@
            
             if (myMarker) map.removeLayer(myMarker);
 
-            // Безопасный круглый маркер для тебя (Синий) — рисуется кодом без внешних картинок
+            // Рисуем твой синий кружок кодом
             myMarker = L.circleMarker([coords.lat, coords.lng], {
                 radius: 12,
                 fillColor: '#0074D9',
