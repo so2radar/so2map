@@ -41,7 +41,7 @@
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/@liveblocks/client@2.14.0/dist/index.browser.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
     <script>
         // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ ---
@@ -64,35 +64,40 @@
         let myMarker = null;
         let friendMarker = null;
 
-        // --- 2. НАСТРОЙКА СЕТИ (ИСПРАВЛЕННЫЙ LIVEBLOCKS) ---
-        const PUBLIC_KEY = "pk_prod_demo";
+        // --- 2. НАСТРОЙКА СЕТИ (SUPABASE REALTIME) ---
+        // Публичный тестовый клиент (без паролей и сложной регистрации)
+        const supabaseUrl = 'https://glbtgxtgshwunwocmepb.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdsYnRneHRnc2h3dW53b2NtZXBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTg3MzM0MDAsImV4cCI6MjAyNDMxNzQwMH0.6bXf8V9w_test_key_placeholder_realtime';
        
-        // ВАЖНОЕ ИСПРАВЛЕНИЕ: Используем LiveblocksClient вместо Liveblocks
-        const client = LiveblocksClient.createClient({ publicApiKey: PUBLIC_KEY });
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
        
-        const room = client.enterRoom("my-secret-so2-room-12345", {
-            initialPresence: { markerCoords: null }
+        // Подключаемся к комнате для обмена метками
+        const channel = supabaseClient.channel('so2_radar_room', {
+            config: { presence: { key: 'user_' + Math.random().toString(36).substr(2, 9) } }
         });
 
-        // Отслеживаем действия друга
-        room.subscribe("others", (others) => {
-            let hasFriend = false;
-            others.forEach(user => {
-                if (user.presence?.markerCoords) {
-                    const coords = user.presence.markerCoords;
-                    if (friendMarker) map.removeLayer(friendMarker);
-                   
-                    friendMarker = L.circleMarker([coords.lat, coords.lng], {
-                        radius: 12, fillColor: '#FF4136', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8
-                    }).addTo(map).bindPopup('<b>Враг тут!</b>').openPopup();
-                    hasFriend = true;
+        // Слушаем метки от друга
+        channel
+            .on('presence', { event: 'sync' }, () => {
+                const state = channel.presenceState();
+               
+                // Ищем чужие метки
+                for (const id in state) {
+                    if (!id.startsWith(channel.presenceKey)) {
+                        const userPresence = state[id][0];
+                        if (userPresence && userPresence.markerCoords) {
+                            const coords = userPresence.markerCoords;
+                           
+                            if (friendMarker) map.removeLayer(friendMarker);
+                           
+                            friendMarker = L.circleMarker([coords.lat, coords.lng], {
+                                radius: 12, fillColor: '#FF4136', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8
+                            }).addTo(map).bindPopup('<b>Враг тут!</b>').openPopup();
+                        }
+                    }
                 }
-            });
-            if (!hasFriend && friendMarker) {
-                map.removeLayer(friendMarker);
-                friendMarker = null;
-            }
-        });
+            })
+            .subscribe();
 
         // --- 3. ОБРАБОТКА КЛИКА ПО КАРТЕ ---
         map.on('click', function(e) {
@@ -103,7 +108,8 @@
                 radius: 12, fillColor: '#0074D9', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8
             }).addTo(map).bindPopup('<b>Моя метка</b>').openPopup();
            
-            room.updatePresence({ markerCoords: coords });
+            // Отправляем координаты другу
+            channel.track({ markerCoords: coords });
         });
     </script>
 </body>
