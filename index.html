@@ -44,7 +44,7 @@
     <script src="https://unpkg.com/@liveblocks/client@2.14.0/dist/index.js"></script>
 
     <script>
-        // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ ---
+         // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ ---
         const MAP_IMAGE = 'radar.jpg';
         const IMAGE_WIDTH = 1024;
         const IMAGE_HEIGHT = 1024;
@@ -58,7 +58,9 @@
         });
 
         const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
-        L.imageOverlay(MAP_IMAGE, bounds).addTo(map);
+       
+        // ВАЖНОЕ ИСПРАВЛЕНИЕ: Добавили { interactive: true }, чтобы картинка пропускала клики!
+        L.imageOverlay(MAP_IMAGE, bounds, { interactive: true }).addTo(map);
         map.fitBounds(bounds);
 
         let myMarker = null;
@@ -68,12 +70,11 @@
         const PUBLIC_KEY = "pk_prod_demo";
         const client = Liveblocks.createClient({ publicApiKey: PUBLIC_KEY });
        
-        // Уникальное имя комнаты
         const room = client.enterRoom("my-secret-so2-room-12345", {
             initialPresence: { markerCoords: null }
         });
 
-        // Отслеживаем действия друга в реальном времени
+        // Отслеживаем действия друга
         room.subscribe("others", (others) => {
             let hasFriend = false;
             others.forEach(user => {
@@ -82,7 +83,6 @@
                    
                     if (friendMarker) map.removeLayer(friendMarker);
                    
-                    // Ставим стандартный маркер для друга
                     friendMarker = L.marker([coords.lat, coords.lng]).addTo(map)
                         .bindPopup('<b>Враг тут!</b>').openPopup();
                        
@@ -99,14 +99,11 @@
         map.on('click', function(e) {
             const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
            
-            // Если старый маркер был — удаляем его
             if (myMarker) map.removeLayer(myMarker);
 
-            // Создаем новый стандартный маркер
             myMarker = L.marker([coords.lat, coords.lng]).addTo(map)
                 .bindPopup('<b>Моя метка</b>').openPopup();
            
-            // Отправляем координаты другу в ту же миллисекунду
             room.updatePresence({ markerCoords: coords });
         });
     </script>
