@@ -41,7 +41,8 @@
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/@liveblocks/client@2.14.0/dist/index.min.js"></script>
+   
+    <script src="https://unpkg.com/@liveblocks/client@2.14.0/dist/index.browser.js"></script>
 
     <script>
         // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ ---
@@ -59,7 +60,7 @@
 
         const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
        
-        // Включаем интерактивность, чтобы клики ловились картой
+        // Интерактивный фон для кликов
         L.imageOverlay(MAP_IMAGE, bounds, { interactive: true }).addTo(map);
         map.fitBounds(bounds);
 
@@ -83,7 +84,7 @@
                    
                     if (friendMarker) map.removeLayer(friendMarker);
                    
-                    // Рисуем красный кружок кодом (не ломает пути к картинкам)
+                    // Рисуем кружок для друга
                     friendMarker = L.circleMarker([coords.lat, coords.lng], {
                         radius: 12,
                         fillColor: '#FF4136',
@@ -108,7 +109,7 @@
            
             if (myMarker) map.removeLayer(myMarker);
 
-            // Рисуем твой синий кружок кодом
+            // Рисуем твой синий кружок
             myMarker = L.circleMarker([coords.lat, coords.lng], {
                 radius: 12,
                 fillColor: '#0074D9',
