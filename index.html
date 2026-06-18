@@ -31,7 +31,7 @@
             padding: 8px 15px;
             border-radius: 20px;
             font-size: 14px;
-            pointer-events: none; /* Защита: клики будут проходить сквозь этот текст */
+            pointer-events: none;
         }
     </style>
 </head>
@@ -44,7 +44,7 @@
     <script src="https://unpkg.com/@liveblocks/client@2.14.0/dist/index.js"></script>
 
     <script>
-         // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ ---
+        // --- 1. НАСТРОЙКА ИГРОВОЙ КАРТЫ ---
         const MAP_IMAGE = 'radar.jpg';
         const IMAGE_WIDTH = 1024;
         const IMAGE_HEIGHT = 1024;
@@ -59,7 +59,7 @@
 
         const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
        
-        // ВАЖНОЕ ИСПРАВЛЕНИЕ: Добавили { interactive: true }, чтобы картинка пропускала клики!
+        // Картинка теперь 100% кликабельная
         L.imageOverlay(MAP_IMAGE, bounds, { interactive: true }).addTo(map);
         map.fitBounds(bounds);
 
@@ -83,8 +83,15 @@
                    
                     if (friendMarker) map.removeLayer(friendMarker);
                    
-                    friendMarker = L.marker([coords.lat, coords.lng]).addTo(map)
-                        .bindPopup('<b>Враг тут!</b>').openPopup();
+                    // Безопасный круглый маркер для друга (Красный)
+                    friendMarker = L.circleMarker([coords.lat, coords.lng], {
+                        radius: 12,
+                        fillColor: '#FF4136',
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(map).bindPopup('<b>Враг тут!</b>').openPopup();
                        
                     hasFriend = true;
                 }
@@ -101,8 +108,15 @@
            
             if (myMarker) map.removeLayer(myMarker);
 
-            myMarker = L.marker([coords.lat, coords.lng]).addTo(map)
-                .bindPopup('<b>Моя метка</b>').openPopup();
+            // Безопасный круглый маркер для тебя (Синий) — рисуется кодом без внешних картинок
+            myMarker = L.circleMarker([coords.lat, coords.lng], {
+                radius: 12,
+                fillColor: '#0074D9',
+                color: '#fff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map).bindPopup('<b>Моя метка</b>').openPopup();
            
             room.updatePresence({ markerCoords: coords });
         });
