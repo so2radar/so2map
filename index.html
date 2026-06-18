@@ -61,14 +61,14 @@
         let myMarker = null;
         let friendMarker = null;
 
-        // Ждем, пока страница полностью загрузится, прежде чем включать синхронизацию
+        // Ждем полную загрузку страницы перед активацией меток
         window.addEventListener('load', () => {
             try {
                 // --- 2. СИНХРОНИЗАЦИЯ ЧЕРЕЗ LIVEBLOCKS ---
                 const PUBLIC_KEY = "pk_prod_demo";
                 const client = Liveblocks.createClient({ publicApiKey: PUBLIC_KEY });
                
-                // Убедись, что имя комнаты уникальное!
+                // Измени это имя комнаты на свое уникальное!
                 const room = client.enterRoom("my-secret-so2-room-12345", {
                     initialPresence: { markerCoords: null }
                 });
@@ -120,10 +120,8 @@
                     room.updatePresence({ markerCoords: coords });
                 });
 
-                console.log("Система меток успешно запущена!");
-
             } catch (error) {
-                console.error("Ошибка запуска Liveblocks:", error);
+                console.error("Ошибка:", error);
             }
         });
     </script>
