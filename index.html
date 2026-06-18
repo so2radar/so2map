@@ -42,75 +42,90 @@
     <script src="https://unpkg.com/@liveblocks/client@2.14.0/dist/index.js"></script>
 
     <script>
-        // --- 1. НАСТРОЙКА КАРТЫ ---
-        // Укажи имя файла своей картинки и её реальные размеры (ширина и высота в пикселях)
-        const MAP_IMAGE = 'radar.jpg';
-        const IMAGE_WIDTH = 1024;
-        const IMAGE_HEIGHT = 1024;
+      // --- 1. НАСТРОЙКА КАРТЫ ---
+        const MAP_IMAGE = 'radar.jpg';
+        const IMAGE_WIDTH = 1024;
+        const IMAGE_HEIGHT = 1024;
 
-        const map = L.map('map', {
-            crs: L.CRS.Simple, // Простая система координат (для картинок, не для глобуса)
-            minZoom: -2,
-            maxZoom: 1,
-            attributionControl: false
-        });
+        const map = L.map('map', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 1,
+            attributionControl: false
+        });
 
-        const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
-        L.imageOverlay(MAP_IMAGE, bounds).addTo(map);
-        map.fitBounds(bounds);
+        const bounds = [[0, 0], [IMAGE_HEIGHT, IMAGE_WIDTH]];
+        L.imageOverlay(MAP_IMAGE, bounds).addTo(map);
+        map.fitBounds(bounds);
 
-        // Переменная для хранения нашего текущего маркера на экране
-        let currentMarker = null;
+        let myMarker = null;
+        let friendMarker = null;
 
-        // --- 2. СИНХРОНИЗАЦИЯ ЧЕРЕЗ LIVEBLOCKS ---
-        // Бесплатный публичный ключ для тестов (в продакшене лучше создать свой на liveblocks.io)
-        const PUBLIC_KEY = "pk_prod_demo";
-        const client = Liveblocks.createClient({ publicApiKey: PUBLIC_KEY });
-       
-        // Создаем приватную комнату. Замени 'my-secret-so2-room' на что-то уникальное,
-        // чтобы никто чужой не подключился к вашим координатам!
-        const room = client.enterRoom("my-secret-so2-room-12345", {
-            initialPresence: { markerCoords: null }
-        });
+        // Ждем, пока страница полностью загрузится, прежде чем включать синхронизацию
+        window.addEventListener('load', () => {
+            try {
+                // --- 2. СИНХРОНИЗАЦИЯ ЧЕРЕЗ LIVEBLOCKS ---
+                const PUBLIC_KEY = "pk_prod_demo";
+                const client = Liveblocks.createClient({ publicApiKey: PUBLIC_KEY });
+               
+                // Убедись, что имя комнаты уникальное!
+                const room = client.enterRoom("my-secret-so2-room-12345", {
+                    initialPresence: { markerCoords: null }
+                });
 
-        // Слушаем изменения от друга
-        room.subscribe("others", (others) => {
-            // Ищем метку друга среди подключенных пользователей
-            others.forEach(user => {
-                if (user.presence?.markerCoords) {
-                    const coords = user.presence.markerCoords;
-                    updateMarker(coords, 'red', 'Враг тут!');
-                }
-            });
-        });
+                // Слушаем изменения от друга
+                room.subscribe("others", (others) => {
+                    let foundFriendMarker = false;
 
-        // Функция отрисовки/обновления маркера на карте
-        function updateMarker(coords, color, text) {
-            if (currentMarker) {
-                map.removeLayer(currentMarker);
-            }
-           
-            // Создаем красивый круглый маркер
-            currentMarker = L.circleMarker([coords.lat, coords.lng], {
-                radius: 12,
-                fillColor: color,
-                color: '#fff',
-                weight: 2,
-                opacity: 1,
-                fillOpacity: 0.8
-            }).addTo(map).bindPopup(text).openPopup();
-        }
+                    others.forEach(user => {
+                        if (user.presence?.markerCoords) {
+                            const coords = user.presence.markerCoords;
+                           
+                            if (friendMarker) map.removeLayer(friendMarker);
+                           
+                            friendMarker = L.circleMarker([coords.lat, coords.lng], {
+                                radius: 12,
+                                fillColor: '#FF4136',
+                                color: '#fff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.8
+                            }).addTo(map).bindPopup('Враг тут!').openPopup();
 
-        // --- 3.ОБРАБОТКА КЛИКА ---
-        map.on('click', function(e) {
-            const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
-           
-            // Ставим маркер у себя (синий)
-            updateMarker(coords, '#0074D9', 'Моя метка');
-           
-            // Мгновенно отправляем координаты другу
-            room.updatePresence({ markerCoords: coords });
-        });
+                            foundFriendMarker = true;
+                        }
+                    });
+
+                    if (!foundFriendMarker && friendMarker) {
+                        map.removeLayer(friendMarker);
+                        friendMarker = null;
+                    }
+                });
+
+                // --- 3. ОБРАБОТКА КЛИКА ---
+                map.on('click', function(e) {
+                    const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
+                   
+                    if (myMarker) map.removeLayer(myMarker);
+
+                    myMarker = L.circleMarker([coords.lat, coords.lng], {
+                        radius: 12,
+                        fillColor: '#0074D9',
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(map).bindPopup('Моя метка').openPopup();
+                   
+                    room.updatePresence({ markerCoords: coords });
+                });
+
+                console.log("Система меток успешно запущена!");
+
+            } catch (error) {
+                console.error("Ошибка запуска Liveblocks:", error);
+            }
+        });
     </script>
 </body>
 </html>
