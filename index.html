@@ -3,93 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SO2 Smart Radar</title>
+    <title>Standoff 2 Web Radar (Competitive)</title>
+   
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+   
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #111; font-family: sans-serif; overflow: hidden; }
-        #map { width: 100%; height: 100vh; z-index: 1; }
-        /* Умная панель интерфейса */
-        .ui-panel { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(0, 0, 0, 0.85); color: #fff; padding: 12px 20px; border-radius: 8px; text-align: center; font-size: 14px; width: 80%; max-width: 450px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .ui-panel input { width: 100%; padding: 6px; margin-top: 8px; background: #222; color: #0f0; border: 1px solid #555; border-radius: 4px; text-align: center; font-family: monospace; outline: none; cursor: pointer; }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #sidebar {
+            width: 320px;
+            padding: 20px;
+            background: #181818;
+            border-right: 1px solid #2a2a2a;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-sizing: border-box;
+        }
+        #map {
+            flex-grow: 1;
+            background: #0b0b0b;
+        }
+        h3 {
+            margin-top: 0;
+            color: #fff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 8px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 0.85em;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        input, button, select {
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            background: #252525;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        input:focus, select:focus {
+            border-color: #007bff;
+        }
+        button {
+            background: #007bff;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status-container {
+            background: #202020;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+        #my-id {
+            font-weight: bold;
+            color: #00ffaa;
+            word-break: break-all;
+        }
+        #connection-status {
+            font-weight: bold;
+            color: #ff4d4d;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
 
-    <div class="ui-panel" id="ui">Подключение к серверу связи...</div>
+    <div id="sidebar">
+        <h3>СОРИВНОВАТЕЛЬНЫЙ РАДАР</h3>
+       
+        <div class="status-container">
+            <div class="form-group">
+                <label>Ваш ID для напарника:</label>
+                <span id="my-id">Генерация...</span>
+            </div>
+            <div id="connection-status">Статус: Отключен</div>
+        </div>
+
+        <div class="form-group">
+            <label for="target-id">ID Напарника:</label>
+            <input type="text" id="target-id" placeholder="Вставьте ID напарника">
+        </div>
+        <button id="connect-btn">Подключиться к напарнику</button>
+
+        <hr style="width: 100%; border: none; border-top: 1px solid #333; margin: 10px 0;">
+
+        <div class="form-group">
+            <label for="map-select">Текущая карта:</label>
+            <select id="map-select">
+                <option value="province">Province</option>
+                <option value="rust">Rust</option>
+                <option value="sand_yards">Sand Yards</option>
+                <option value="zone_9">Zone 9</option>
+                <option value="sakura">Sakura</option>
+                <option value="breeze">Breeze</option>
+                <option value="dune">Dune</option>
+            </select>
+        </div>
+    </div>
+
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-
-    <script>
-        // --- 1. НАСТРОЙКА КАРТЫ ---
-        const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 1, zoomControl: true, attributionControl: false });
-        const bounds = [[0, 0], [1024, 1024]];
-        L.imageOverlay('radar.jpg', bounds, { interactive: true }).addTo(map);
-        map.fitBounds(bounds);
-
-        let myMarker = null;
-        let friendMarker = null;
-        let connection = null;
-
-        // --- 2. УМНАЯ СЕТЬ (Генерация приватной ссылки) ---
-        const ui = document.getElementById('ui');
-        const peer = new Peer(); // Создаем случайный уникальный ID
-       
-        // Проверяем, есть ли в ссылке приглашение от друга
-        const urlParams = new URLSearchParams(window.location.search);
-        const roomToJoin = urlParams.get('room');
-
-        peer.on('open', (myId) => {
-            if (roomToJoin) {
-                // Если мы перешли по ссылке друга
-                ui.innerHTML = "Подключаемся к напарнику...";
-                connection = peer.connect(roomToJoin);
-                setupConnection(connection);
-            } else {
-                // Если мы сами создали карту (Игрок 1)
-                const inviteLink = window.location.origin + window.location.pathname + '?room=' + myId;
-                ui.innerHTML = `Отправь эту ссылку напарнику:<br><input type="text" value="${inviteLink}" readonly onclick="this.select(); document.execCommand('copy'); alert('Ссылка скопирована!');">`;
-            }
-        });
-
-        // Если друг подключился к нам по нашей ссылке
-        peer.on('connection', (conn) => {
-            connection = conn;
-            setupConnection(connection);
-        });
-
-        function setupConnection(conn) {
-            conn.on('open', () => {
-                ui.innerHTML = "<span style='color: #0f0; font-weight: bold;'>Связь установлена! Радар синхронизирован.</span>";
-            });
-           
-            // Получаем метку от друга и ставим красный кружок
-            conn.on('data', (data) => {
-                if (data && data.lat && data.lng) {
-                    if (friendMarker) map.removeLayer(friendMarker);
-                    friendMarker = L.circleMarker([data.lat, data.lng], {
-                        radius: 12, fillColor: '#FF4136', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8
-                    }).addTo(map).bindPopup('<b>Враг тут!</b>').openPopup();
-                }
-            });
-        }
-
-        // --- 3. ОБРАБОТКА КЛИКОВ ПО КАРТЕ ---
-        map.on('click', function(e) {
-            const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
-            if (myMarker) map.removeLayer(myMarker);
-
-            // Твой синий кружок
-            myMarker = L.circleMarker([coords.lat, coords.lng], {
-                radius: 12, fillColor: '#0074D9', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8
-            }).addTo(map).bindPopup('<b>Моя метка</b>').openPopup();
-           
-            // Отправляем координаты напрямую другу
-            if (connection && connection.open) {
-                connection.send(coords);
-            }
-        });
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
