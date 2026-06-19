@@ -70,7 +70,16 @@ function updateMarker(id, lat, lng, isMe = false) {
 // 2. СЕТЕВАЯ ЛОГИКА P2P (PEERJS)
 // ========================================================
 
-const peer = new Peer();
+const peer = new Peer({
+    config: {
+        'iceServers': [
+            { urls: 'stun:stun.yandex.ru:3478' },         // Сервер Яндекса (не блокируется в РФ)
+            { urls: 'stun:stun.l.google.com:19302' },     // Стандартный Google
+            { urls: 'stun:global.stun.twilio.com:3478' }  // Надёжный запасной мировой сервер
+        ]
+    }
+});
+
 let currentConnection = null;
 
 const idDisplay = document.getElementById('my-id');
