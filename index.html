@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standoff 2 Web Radar (Competitive)</title>
+   
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+   
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #sidebar {
+            width: 320px;
+            padding: 20px;
+            background: #181818;
+            border-right: 1px solid #2a2a2a;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-sizing: border-box;
+        }
+        #map {
+            flex-grow: 1;
+            background: #0b0b0b;
+        }
+        h3 {
+            margin-top: 0;
+            color: #fff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 8px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        label {
+            font-size: 0.85em;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        input, button, select {
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            background: #252525;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        input:focus, select:focus {
+            border-color: #007bff;
+        }
+        button {
+            background: #007bff;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status-container {
+            background: #202020;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+        #my-id {
+            font-weight: bold;
+            color: #00ffaa;
+            word-break: break-all;
+        }
+        #connection-status {
+            font-weight: bold;
+            color: #ff4d4d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h3>СОРИВНОВАТЕЛЬНЫЙ РАДАР</h3>
+       
+        <div class="status-container">
+            <div class="form-group">
+                <label>Ваш ID для напарника:</label>
+                <span id="my-id">Генерация...</span>
+            </div>
+            <div id="connection-status">Статус: Отключен</div>
+        </div>
+
+        <div class="form-group">
+            <label for="target-id">ID Напарника:</label>
+            <input type="text" id="target-id" placeholder="Вставьте ID напарника">
+        </div>
+        <button id="connect-btn">Подключиться к напарнику</button>
+
+        <hr style="width: 100%; border: none; border-top: 1px solid #333; margin: 10px 0;">
+
+        <div class="form-group">
+            <label for="map-select">Текущая карта:</label>
+            <select id="map-select">
+                <option value="province">Province</option>
+                <option value="rust">Rust</option>
+                <option value="sand_yards">Sand Yards</option>
+                <option value="zone_9">Zone 9</option>
+                <option value="sakura">Sakura</option>
+                <option value="breeze">Breeze</option>
+                <option value="dune">Dune</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
