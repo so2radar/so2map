@@ -70,15 +70,20 @@ function updateMarker(id, lat, lng, isMe = false) {
 // 2. СЕТЕВАЯ ЛОГИКА P2P (PEERJS)
 // ========================================================
 
-const peer = new Peer({
+const peer = new Peer(undefined, {
+    host: 'so2-radar.onrender.com',
+    port: 443,
+    secure: true,
+    path: '/peerjs',
     config: {
         'iceServers': [
-            { urls: 'stun:stun.yandex.ru:3478' },         // Сервер Яндекса (не блокируется в РФ)
-            { urls: 'stun:stun.l.google.com:19302' },     // Стандартный Google
-            { urls: 'stun:global.stun.twilio.com:3478' }  // Надёжный запасной мировой сервер
+            { urls: 'stun:stun.yandex.ru:3478' },
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
         ]
     }
 });
+
 
 let currentConnection = null;
 
