@@ -10,10 +10,12 @@ const map = L.map('map', {
 let currentMapBounds = [[0, 0], [1000, 1000]];
 let mapImageOverlay = null;
 
+// Функция для смены карты
 function changeMap(mapName) {
     if (mapImageOverlay) {
         map.removeLayer(mapImageOverlay);
     }
+    // Картинки берутся из папки maps/ в формате .png
     const imageUrl = `maps/${mapName}.png`; 
     mapImageOverlay = L.imageOverlay(imageUrl, currentMapBounds).addTo(map);
     map.fitBounds(currentMapBounds);
@@ -39,85 +41,70 @@ function updateMarker(id, lat, lng, isMe = false) {
 }
 
 // ==========================================
-// 2. СЕТЕВАЯ ЛОГИКА (P2P через PEERJS)
+// 2. СЕТЕВАЯ ЛОГИКА (SOCKET.IO ЧЕРЕЗ RENDER)
 // ==========================================
-// Подключаемся к надежному публичному серверу PeerJS
-const peer = new Peer(); 
+// Подключаемся к твоему серверу
+const socket = io('https://so2-radar.onrender.com');
 
-let currentConnection = null;
+let activePartnerId = null;
+
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
 
 const idDisplay = document.getElementById('my-id');
 const statusDisplay = document.getElementById('connection-status');
 const connectBtn = document.getElementById('connect-btn');
 const targetIdInput = document.getElementById('target-id');
 
-// Когда облако выдало нам уникальный ID
-peer.on('open', (id) => {
-    if (idDisplay) idDisplay.textContent = id;
+const myId = generateUUID();
+if (idDisplay) idDisplay.textContent = myId;
+
+// Автоматически заходим в свою "комнату" на сервере
+socket.on('connect', () => {
+    socket.emit('join-room', myId);
 });
 
-// Настройка событий для текущего соединения
-function setupConnection(conn) {
-    conn.on('open', () => {
-        statusDisplay.textContent = "Статус: Подключено (P2P)";
-        statusDisplay.style.color = "#00ffaa";
-    });
-
-    // Когда получаем данные от напарника
-    conn.on('data', (data) => {
-        if (data.type === 'location') {
-            // Рисуем метку напарника
-            updateMarker('partner', data.lat, data.lng, false);
-        }
-    });
-    
-    conn.on('close', () => {
-        statusDisplay.textContent = "Статус: Отключен";
-        statusDisplay.style.color = "#ff4d4d";
-    });
-}
-
-// Если напарник инициировал подключение к нам
-peer.on('connection', (conn) => {
-    currentConnection = conn;
-    setupConnection(conn);
-});
-
-// Если мы нажимаем кнопку "Подключиться"
+// Кнопка "Подключиться"
 if (connectBtn) {
     connectBtn.addEventListener('click', () => {
         const targetId = targetIdInput.value.trim();
         if (targetId) {
-            statusDisplay.textContent = "Подключение...";
-            statusDisplay.style.color = "#ffaa00";
+            activePartnerId = targetId; 
             
-            // Стучимся к напарнику по его ID
-            currentConnection = peer.connect(targetId);
-            setupConnection(currentConnection);
+            statusDisplay.textContent = "Статус: Подключено (Сервер)";
+            statusDisplay.style.color = "#00ffaa";
         } else {
             alert('Сначала вставьте ID напарника!');
         }
     });
 }
 
+// Получение координат с сервера
+socket.on('update-location', (data) => {
+    updateMarker(data.senderId, data.lat, data.lng, false);
+});
+
 // ==========================================
 // 3. ОТПРАВКА ДАННЫХ
 // ==========================================
 function broadcastMyPosition(lat, lng) {
-    // Рисуем себя на своей карте
-    updateMarker('me', lat, lng, true);
+    updateMarker(myId, lat, lng, true);
 
-    // Если связь установлена — отправляем координаты пакетным сообщением
-    if (currentConnection && currentConnection.open) {
-        currentConnection.send({
-            type: 'location',
+    if (activePartnerId) {
+        socket.emit('send-location', {
+            room: activePartnerId, 
+            senderId: myId,        
             lat: lat,
             lng: lng
         });
     }
 }
 
-// ТЕСТ: Клик по карте имитирует твои шаги в игре
+// Тест: Клик по карте
 map.on('click', (e) => {
     broadcastMyPosition(e.latlng.lat, e.latlng.lng);
 });
