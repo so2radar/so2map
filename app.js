@@ -1,14 +1,13 @@
 // ==========================================
 // 1. ИНИЦИАЛИЗАЦИЯ КАРТЫ (Leaflet)
 // ==========================================
-// Создаем карту. Если у тебя были свои настройки CRS или зума — оставь их.
 const map = L.map('map', {
     crs: L.CRS.Simple,
     minZoom: -2,
     maxZoom: 2
 });
 
-let currentMapBounds = [[0, 0], [1000, 1000]]; // Примерные границы карты
+let currentMapBounds = [[0, 0], [1000, 1000]];
 let mapImageOverlay = null;
 
 // Функция для смены карты из выпадающего списка
@@ -16,8 +15,8 @@ function changeMap(mapName) {
     if (mapImageOverlay) {
         map.removeLayer(mapImageOverlay);
     }
-    // Здесь путь к картинкам твоих карт. Убедись, что папка называется правильно.
-    const imageUrl = `${mapName}.jpg`; 
+    // ИСПРАВЛЕНО: Картинки лежат в папке maps/ и имеют расширение .png
+    const imageUrl = `maps/${mapName}.png`; 
     mapImageOverlay = L.imageOverlay(imageUrl, currentMapBounds).addTo(map);
     map.fitBounds(currentMapBounds);
 }
@@ -47,10 +46,11 @@ function updateMarker(id, lat, lng, isMe = false) {
 // ==========================================
 // 2. СЕТЕВАЯ ЛОГИКА (SOCKET.IO)
 // ==========================================
-// Подключаемся к твоему серверу на Render
 const socket = io('https://so2-radar.onrender.com');
 
-// Функция для генерации уникального ID
+// Глобальная переменная, где храним ID напарника, к которому подключились
+let activePartnerId = null;
+
 function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -58,21 +58,27 @@ function generateUUID() {
     });
 }
 
-// ПРИВЯЗКА К ИНТЕРФЕЙСУ (те самые потерянные строчки из консоли)
 const idDisplay = document.getElementById('my-id');
 const statusDisplay = document.getElementById('connection-status');
 const connectBtn = document.getElementById('connect-btn');
 const targetIdInput = document.getElementById('target-id');
 
-// Создаем твой ID и сразу выводим его на экран вместо "Генерация..."
 const myId = generateUUID();
 if (idDisplay) idDisplay.textContent = myId;
+
+// При подключении к серверу — автоматически заходим в комнату своего же ID,
+// чтобы напарник мог слать нам данные по этому идентификатору
+socket.on('connect', () => {
+    socket.emit('join-room', myId);
+});
 
 // Кнопка "Подключиться к напарнику"
 if (connectBtn) {
     connectBtn.addEventListener('click', () => {
         const targetId = targetIdInput.value.trim();
         if (targetId) {
+            activePartnerId = targetId; // Запоминаем, кому отправлять координаты
+            
             // Меняем статус на зеленый
             statusDisplay.textContent = "Статус: Подключено (WebSocket)";
             statusDisplay.style.color = "#00ffaa";
@@ -82,25 +88,28 @@ if (connectBtn) {
     });
 }
 
-// Получение координат от напарника с сервера
+// Получение координат от напарника с сервера Render
 socket.on('update-location', (data) => {
-    const partnerId = "partner_device";
-    updateMarker(partnerId, data.lat, data.lng, false);
+    // Отрисовываем метку напарника, используя его реальный ID
+    updateMarker(data.senderId, data.lat, data.lng, false);
 });
 
 // ==========================================
 // 3. ОТПРАВКА И ТЕСТИРОВАНИЕ ДАННЫХ
 // ==========================================
-// Функция для трансляции своей позиции
 function broadcastMyPosition(lat, lng) {
-    // Отображаем себя на своей карте
+    // Отображаем себя на своей собственной карте
     updateMarker(myId, lat, lng, true);
 
-    // Мгновенно шлём координаты на сервер Render
-    socket.emit('send-location', {
-        lat: lat,
-        lng: lng
-    });
+    // Шлём координаты, только если ввели ID напарника
+    if (activePartnerId) {
+        socket.emit('send-location', {
+            room: activePartnerId, // Сервер отправит это в комнату напарника
+            senderId: myId,        // Чтобы напарник знал, чей это маркер
+            lat: lat,
+            lng: lng
+        });
+    }
 }
 
 // ТЕСТОВЫЙ РЕЖИМ КЛИКА: Клик по карте симулирует твое перемещение
