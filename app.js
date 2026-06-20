@@ -1,5 +1,5 @@
 // ==========================================
-// 1. ЭЛЕМЕНТЫ ИНТЕРФЕЙСА (Исправлено!)
+// 1. ЭЛЕМЕНТЫ ИНТЕРФЕЙСА
 // ==========================================
 const idDisplay = document.getElementById('my-id');
 const statusDisplay = document.getElementById('connection-status');
@@ -23,7 +23,6 @@ function changeMap(mapName) {
     if (mapImageOverlay) {
         map.removeLayer(mapImageOverlay);
     }
-    // Проверенный путь к твоим .png картинкам
     const imageUrl = `maps/${mapName}.png`; 
     mapImageOverlay = L.imageOverlay(imageUrl, currentMapBounds).addTo(map);
     map.fitBounds(currentMapBounds);
@@ -36,14 +35,61 @@ if (mapSelect) {
     changeMap(mapSelect.value);
 }
 
-const markers = {};
+// ==========================================
+// ЛОГИКА МЕТОК (ДО 5 ШТУК + УДАЛЕНИЕ ПО КЛИКУ)
+// ==========================================
+const markers = {}; // Хранилище массивов меток для каждого пользователя
 
-function updateMarker(id, lat, lng, isMe = false) {
+function addMarker(id, lat, lng, markerUid, isMe = false) {
     if (!markers[id]) {
-        markers[id] = L.marker([lat, lng]).addTo(map);
-        markers[id].bindTooltip(isMe ? "Вы" : "Напарник", { permanent: true, className: "my-label", offset: [0, 0] });
-    } else {
-        markers[id].setLatLng([lat, lng]);
+        markers[id] = [];
+    }
+
+    // Если меток уже 5, удаляем самую старую
+    if (markers[id].length >= 5) {
+        const oldestMarker = markers[id].shift();
+        map.removeLayer(oldestMarker);
+    }
+
+    // Создаем новую метку
+    const newMarker = L.marker([lat, lng]).addTo(map);
+    newMarker.bindTooltip(isMe ? "Вы" : "Напарник", { permanent: true, className: "my-label", offset: [0, 0] });
+    
+    // Записываем в метку её уникальный ID, чтобы точно знать, какую удалять
+    newMarker.markerUid = markerUid;
+    newMarker.ownerId = id;
+
+    // Слушатель клика ПО САМОЙ МЕТКЕ для её удаления
+    newMarker.on('click', (e) => {
+        // Обязательно останавливаем всплытие события, чтобы клик по метке не засчитался как клик по карте!
+        L.DomEvent.stopPropagation(e);
+        
+        // Удаляем метку у себя на экране
+        removeSingleMarker(id, markerUid);
+
+        // Отправляем напарнику команду удалить эту же метку у себя
+        if (activePartnerId) {
+            socket.emit('send-location', {
+                room: activePartnerId,
+                action: 'delete-marker',
+                targetOwnerId: id,
+                targetMarkerUid: markerUid
+            });
+        }
+    });
+
+    markers[id].push(newMarker);
+}
+
+// Функция для удаления конкретного маркера с карты и из памяти
+function removeSingleMarker(ownerId, markerUid) {
+    if (markers[ownerId]) {
+        // Находим индекс нужного маркера по его UID
+        const index = markers[ownerId].findIndex(m => m.markerUid === markerUid);
+        if (index !== -1) {
+            map.removeLayer(markers[ownerId][index]); // Стираем с карты
+            markers[ownerId].splice(index, 1);       // Удаляем из массива
+        }
     }
 }
 
@@ -63,7 +109,6 @@ function generateUUID() {
 const myId = generateUUID();
 if (idDisplay) idDisplay.textContent = myId;
 
-// Как только открыли сайт — подключаемся к серверу в свою комнату
 socket.on('connect', () => {
     socket.emit('join-room', myId);
     if (statusDisplay) {
@@ -79,44 +124,52 @@ socket.on('disconnect', () => {
     }
 });
 
-// Клик по кнопке "Подключиться"
 if (connectBtn) {
     connectBtn.addEventListener('click', () => {
         const targetId = targetIdInput.value.trim();
         if (targetId) {
             activePartnerId = targetId; 
-            alert('ID напарника сохранен! Теперь кликайте по карте.');
+            alert('ID напарника сохранен! Теперь кликайте по карте. Клик по метке удаляет её.');
         } else {
             alert('Сначала вставьте ID напарника!');
         }
     });
 }
 
-// Прием координат от сервера
+// Прием сетевых пакетов от сервера
 socket.on('update-location', (data) => {
-    // Рисуем маркер напарника по его уникальному ID
-    updateMarker(data.senderId, data.lat, data.lng, false);
+    // Если напарник прислал сигнал об удалении конкретной метки
+    if (data.action === 'delete-marker') {
+        removeSingleMarker(data.targetOwnerId, data.targetMarkerUid);
+    } else {
+        // Иначе это обычные координаты новой метки
+        addMarker(data.senderId, data.lat, data.lng, data.markerUid, false);
+    }
 });
 
 // ==========================================
 // 4. ОТПРАВКА ДАННЫХ
 // ==========================================
 function broadcastMyPosition(lat, lng) {
-    // Ставим маркер у себя на экране
-    updateMarker(myId, lat, lng, true);
+    // Генерируем уникальный ID для конкретно этой создаваемой метки
+    const markerUid = generateUUID();
 
-    // Если мы ввели ID напарника — пересылаем ему
+    // Ставим её у себя
+    addMarker(myId, lat, lng, markerUid, true);
+
+    // Шлем напарнику
     if (activePartnerId) {
         socket.emit('send-location', {
-            room: activePartnerId, // В какую комнату шлем (напарнику)
-            senderId: myId,        // Кто шлет
+            room: activePartnerId, 
+            senderId: myId,        
             lat: lat,
-            lng: lng
+            lng: lng,
+            markerUid: markerUid // Передаем UID, чтобы напарник мог её идентифицировать
         });
     }
 }
 
-// Клик по карте для теста
+// Клик по карте ставит новую метку
 map.on('click', (e) => {
     broadcastMyPosition(e.latlng.lat, e.latlng.lng);
 });
