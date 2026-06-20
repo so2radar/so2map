@@ -66,94 +66,55 @@ function updateMarker(id, lat, lng, isMe = false) {
     }
 }
 
-// ========================================================
-// 2. СЕТЕВАЯ ЛОГИКА P2P (PEERJS)
-// ========================================================
+// ==========================================
+// 2. СЕТЕВАЯ ЛОГИКА (WEBSOCKETS / SOCKET.IO)
+// ==========================================
+const socket = io('https://so2-radar.onrender.com');
 
-const peer = new Peer(undefined, {
-    host: 'so2-radar.onrender.com',
-    port: 443,
-    secure: true,
-    path: '/peerjs',
-    config: {
-        'iceServers': [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun.yandex.ru:3478' },
-            {
-                urls: 'turn:openrelay.metered.ca:80',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            },
-            {
-                urls: 'turn:openrelay.metered.ca:443',
-                username: 'openrelayproject',
-                credential: 'openrelayproject'
-            }
-        ]
+// Генератор красивого UUID-идентификатора взамен PeerJS
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+const myId = generateUUID();
+
+// Как только сокет успешно соединился с сервером Render
+socket.on('connect', () => {
+    idDisplay.textContent = myId;
+    // Регистрируем комнату на сервере под нашим ID
+    socket.emit('create-room', myId);
+});
+
+// Когда напарник подключился к нам (или мы к нему)
+socket.on('paired', () => {
+    statusDisplay.textContent = "Статус: Подключено к напарнику";
+    statusDisplay.style.color = "#00ff88";
+});
+
+// Обработка клика по кнопке "Подключиться к напарнику"
+connectBtn.addEventListener('click', () => {
+    const targetId = targetIdInput.value.trim();
+    if (targetId) {
+        socket.emit('join-room', targetId);
+        statusDisplay.textContent = "Статус: Подключено к напарнику";
+        statusDisplay.style.color = "#00ff88";
     }
 });
 
-let currentConnection = null;
-
-const idDisplay = document.getElementById('my-id');
-const statusDisplay = document.getElementById('connection-status');
-const connectBtn = document.getElementById('connect-btn');
-const targetIdInput = document.getElementById('target-id');
-
-// Когда сервер PeerJS сгенерировал уникальный ID для этого устройства
-peer.on('open', (id) => {
-    idDisplay.textContent = id;
+// Получение координат от напарника через сервер
+socket.on('update-location', (data) => {
+    // Берем твою готовую логику отрисовки маркера
+    const partnerId = "partner_device";
+    if (!markers[partnerId]) {
+        markers[partnerId] = L.marker([data.lat, data.lng]).addTo(map);
+        markers[partnerId].bindTooltip("Напарник", { permanent: true, direction: 'top' });
+    } else {
+        markers[partnerId].setLatLng([data.lat, data.lng]);
+    }
 });
-
-// Слушаем входящие подключения от напарника
-peer.on('connection', (conn) => {
-    setupConnection(conn);
-});
-
-// Логика нажатия на кнопку "Подключиться к напарнику"
-connectBtn.addEventListener('click', () => {
-    const targetId = targetIdInput.value.trim();
-    if (!targetId) return;
-   
-    statusDisplay.textContent = 'Статус: Подключение...';
-    statusDisplay.style.color = '#ffaa00';
-   
-    const conn = peer.connect(targetId);
-    setupConnection(conn);
-});
-
-// Централизованная обработка открытого канала данных
-function setupConnection(conn) {
-    currentConnection = conn;
-   
-    conn.on('open', () => {
-        statusDisplay.textContent = 'Статус: Подключено к напарнику';
-        statusDisplay.style.color = '#00ffaa';
-    });
-
-    // Прием пакетов с координатами
-    conn.on('data', (data) => {
-        try {
-            // Проверяем, на одной ли мы карте с напарником
-            const activeMap = document.getElementById('map-select').value;
-            if (data.map === activeMap) {
-                updateMarker(data.id, data.lat, data.lng, false);
-            }
-        } catch (e) {
-            console.error("Ошибка обработки пакета координат:", e);
-        }
-    });
-
-    // Если напарник отключился или закрыл вкладку
-    conn.on('close', () => {
-        statusDisplay.textContent = 'Статус: Отключен';
-        statusDisplay.style.color = '#ff4d4d';
-        if (markers[conn.peer]) {
-            map.removeLayer(markers[conn.peer]);
-            delete markers[conn.peer];
-        }
-    });
-}
 
 // ========================================================
 // 3. ОТПРАВКА И ТЕСТИРОВАНИЕ ДАННЫХ
@@ -161,19 +122,14 @@ function setupConnection(conn) {
 
 // Функция для трансляции своей позиции напарнику
 function broadcastMyPosition(lat, lng) {
-    // Отображаем себя на своей же карте
-    updateMarker(peer.id, lat, lng, true);
+    // Отображаем себя на своей карте (используем наш новый UUID-идентификатор)
+    updateMarker(myId, lat, lng, true);
 
-    // Если сеть установлена — отправляем пакет напарнику
-    if (currentConnection && currentConnection.open) {
-        const payload = {
-            id: peer.id,
-            lat: lat,
-            lng: lng,
-            map: document.getElementById('map-select').value
-        };
-        currentConnection.send(payload);
-    }
+    // Мгновенно шлём координаты на сервер Render через веб-сокет
+    socket.emit('send-location', { 
+        lat: lat, 
+        lng: lng 
+    });
 }
 
 // ТЕСТОВЫЙ РЕЖИМ КЛИКА: Клик по карте симулирует перемещение персонажа
