@@ -1,7 +1,7 @@
 {
   "name": "so2-radar-server",
   "version": "1.0.0",
-  "description": "Личный сервер связи для радара",
+  "description": "Личный сервер связи для радара Socket.IO",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,4 +11,3 @@
     "socket.io": "^4.7.5"
   }
 }
-
