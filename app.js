@@ -69,17 +69,20 @@ function updateMarker(id, lat, lng, isMe = false) {
 // ==========================================
 // 2. СЕТЕВАЯ ЛОГИКА (WEBSOCKETS / SOCKET.IO)
 // ==========================================
+// 1. Подключаемся к твоему серверу на Render
 const socket = io('https://so2-radar.onrender.com');
 
-// Генератор красивого UUID-идентификатора взамен PeerJS
+// 2. Функция для создания уникального ID
 function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
     });
 }
 
+// 3. Создаем ID и выводим его вместо слова "Генерация..."
 const myId = generateUUID();
+document.getElementById('my-id').textContent = myId;
 
 // Как только сокет успешно соединился с сервером Render
 socket.on('connect', () => {
