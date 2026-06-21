@@ -8,7 +8,7 @@ const targetIdInput = document.getElementById('target-id');
 const mapSelect = document.getElementById('map-select');
 
 // ==========================================
-// 2. ИНИЦИАЛИЗАЦИЯ КАРТЫ
+// 2. ИНИЦИАЛИЗАЦИЯ КАРТЫ И ЗВУКА
 // ==========================================
 const map = L.map('map', {
     crs: L.CRS.Simple,
@@ -35,39 +35,59 @@ if (mapSelect) {
     changeMap(mapSelect.value);
 }
 
+// --- НОВАЯ ФУНКЦИЯ: ЗВУКОВОЙ ПИНГ ---
+function playPingSound() {
+    try {
+        // Создаем встроенный синтезатор звука
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        // Настраиваем резкий, короткий звук, похожий на радар
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Высокая частота
+        oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
+        
+        // Настраиваем громкость и затухание
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.1); // Звук длится всего 0.1 секунды
+    } catch(e) {
+        console.log('Звук не поддерживается или заблокирован до первого клика');
+    }
+}
+
 // ==========================================
-// ЛОГИКА МЕТОК (ДО 5 ШТУК + УДАЛЕНИЕ ПО КЛИКУ)
+// 3. ЛОГИКА МЕТОК (АВТО-УДАЛЕНИЕ И УДАЛЕНИЕ ПО КЛИКУ)
 // ==========================================
-const markers = {}; // Хранилище массивов меток для каждого пользователя
+const markers = {}; 
 
 function addMarker(id, lat, lng, markerUid, isMe = false) {
     if (!markers[id]) {
         markers[id] = [];
     }
 
-    // Если меток уже 5, удаляем самую старую
+    // Если вдруг накопилось 5 (хотя они теперь и так удаляются сами)
     if (markers[id].length >= 5) {
         const oldestMarker = markers[id].shift();
         map.removeLayer(oldestMarker);
     }
 
-    // Создаем новую метку
     const newMarker = L.marker([lat, lng]).addTo(map);
     newMarker.bindTooltip(isMe ? "Вы" : "Напарник", { permanent: true, className: "my-label", offset: [0, 0] });
     
-    // Записываем в метку её уникальный ID, чтобы точно знать, какую удалять
     newMarker.markerUid = markerUid;
     newMarker.ownerId = id;
 
-    // Слушатель клика ПО САМОЙ МЕТКЕ для её удаления
+    // Ручное удаление (если нужно удалить быстрее, чем за 4 секунды)
     newMarker.on('click', (e) => {
-        // Обязательно останавливаем всплытие события, чтобы клик по метке не засчитался как клик по карте!
         L.DomEvent.stopPropagation(e);
-        
-        // Удаляем метку у себя на экране
         removeSingleMarker(id, markerUid);
-
-        // Отправляем напарнику команду удалить эту же метку у себя
         if (activePartnerId) {
             socket.emit('send-location', {
                 room: activePartnerId,
@@ -79,22 +99,26 @@ function addMarker(id, lat, lng, markerUid, isMe = false) {
     });
 
     markers[id].push(newMarker);
+
+    // --- НОВАЯ ФУНКЦИЯ: АВТОМАТИЧЕСКОЕ ИСЧЕЗНОВЕНИЕ ---
+    // Ровно через 4000 мс (4 секунды) метка удалится сама
+    setTimeout(() => {
+        removeSingleMarker(id, markerUid);
+    }, 4000);
 }
 
-// Функция для удаления конкретного маркера с карты и из памяти
 function removeSingleMarker(ownerId, markerUid) {
     if (markers[ownerId]) {
-        // Находим индекс нужного маркера по его UID
         const index = markers[ownerId].findIndex(m => m.markerUid === markerUid);
         if (index !== -1) {
-            map.removeLayer(markers[ownerId][index]); // Стираем с карты
-            markers[ownerId].splice(index, 1);       // Удаляем из массива
+            map.removeLayer(markers[ownerId][index]); 
+            markers[ownerId].splice(index, 1);       
         }
     }
 }
 
 // ==========================================
-// 3. СЕТЕВАЯ ЛОГИКА Sockets
+// 4. СЕТЕВАЯ ЛОГИКА Sockets
 // ==========================================
 const socket = io('https://so2-radar.onrender.com');
 let activePartnerId = null;
@@ -129,47 +153,48 @@ if (connectBtn) {
         const targetId = targetIdInput.value.trim();
         if (targetId) {
             activePartnerId = targetId; 
-            alert('ID напарника сохранен! Теперь кликайте по карте. Клик по метке удаляет её.');
+            alert('ID напарника сохранен! Метки будут исчезать через 4 сек.');
+            
+            // Запускаем пустой звук один раз при подключении, 
+            // чтобы браузер дал разрешение на воспроизведение аудио
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtx.resume();
         } else {
             alert('Сначала вставьте ID напарника!');
         }
     });
 }
 
-// Прием сетевых пакетов от сервера
+// Прием сетевых пакетов от напарника
 socket.on('update-location', (data) => {
-    // Если напарник прислал сигнал об удалении конкретной метки
     if (data.action === 'delete-marker') {
         removeSingleMarker(data.targetOwnerId, data.targetMarkerUid);
     } else {
-        // Иначе это обычные координаты новой метки
         addMarker(data.senderId, data.lat, data.lng, data.markerUid, false);
+        
+        // --- ПРОИГРЫВАЕМ ЗВУК, КОГДА ПРИШЛА МЕТКА ---
+        playPingSound(); 
     }
 });
 
 // ==========================================
-// 4. ОТПРАВКА ДАННЫХ
+// 5. ОТПРАВКА ДАННЫХ
 // ==========================================
 function broadcastMyPosition(lat, lng) {
-    // Генерируем уникальный ID для конкретно этой создаваемой метки
     const markerUid = generateUUID();
-
-    // Ставим её у себя
     addMarker(myId, lat, lng, markerUid, true);
 
-    // Шлем напарнику
     if (activePartnerId) {
         socket.emit('send-location', {
             room: activePartnerId, 
             senderId: myId,        
             lat: lat,
             lng: lng,
-            markerUid: markerUid // Передаем UID, чтобы напарник мог её идентифицировать
+            markerUid: markerUid 
         });
     }
 }
 
-// Клик по карте ставит новую метку
 map.on('click', (e) => {
     broadcastMyPosition(e.latlng.lat, e.latlng.lng);
 });
